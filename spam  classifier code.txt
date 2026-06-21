@@ -1,0 +1,93 @@
+import pandas as pd
+import numpy as np
+import re
+import nltk
+
+from nltk.corpus import stopwords
+from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, confusion_matrix
+
+nltk.download('stopwords')
+stop_words = set(stopwords.words('english'))
+
+
+def clean_text(text):
+    text = text.lower()
+    text = re.sub(r'[^a-zA-Z]', ' ', text)
+    words = text.split()
+    words = [w for w in words if w not in stop_words]
+    return " ".join(words)
+
+# ----------------------------
+# 2. LOAD DATA
+# ----------------------------
+df = pd.read_csv('sms-spam-collection.zip', encoding='latin-1')
+
+# keep only required columns
+df = df[['v1', 'v2']]
+
+df.columns = ['label', 'text']
+
+# convert labels to numbers
+df['label'] = df['label'].map({'ham': 0, 'spam': 1})
+
+# clean text
+df['text'] = df['text'].apply(clean_text)
+
+# ----------------------------
+# 3. TRAIN TEST SPLIT
+# ----------------------------
+X_train, X_test, y_train, y_test = train_test_split(
+    df['text'], df['label'], test_size=0.2, random_state=42
+)
+
+# ----------------------------
+# 4. TF-IDF VECTORIZATION
+# ----------------------------
+vectorizer = TfidfVectorizer(
+    ngram_range = (1,2),
+    min_df = 2
+)
+X_train_vec = vectorizer.fit_transform(X_train)
+X_test_vec = vectorizer.transform(X_test)
+
+
+nb_model = MultinomialNB()
+nb_model.fit(X_train_vec, y_train)
+
+nb_preds = nb_model.predict(X_test_vec)
+
+print("\nNaive Bayes Results")
+print("Accuracy:", accuracy_score(y_test, nb_preds))
+print("Confusion Matrix:\n", confusion_matrix(y_test, nb_preds))
+
+lr_model = LogisticRegression()
+lr_model.fit(X_train_vec, y_train)
+
+lr_preds = lr_model.predict(X_test_vec)
+
+print("\nLogistic Regression Results")
+print("Accuracy:", accuracy_score(y_test, lr_preds))
+print("Confusion Matrix:\n", confusion_matrix(y_test, lr_preds))
+
+
+def predict_message(msg):
+    msg = clean_text(msg)
+    msg_vec = vectorizer.transform([msg])
+
+    nb_result = nb_model.predict(msg_vec)[0]
+    lr_result = lr_model.predict(msg_vec)[0]
+
+    print("\nMessage:", msg)
+    print("Naive Bayes Prediction:", "Spam" if nb_result == 1 else "Not Spam")
+    print("Logistic Regression Prediction:", "Spam" if lr_result == 1 else "Not Spam")
+
+
+while True:
+    user_input = input("\nEnter message (or type 'exit'): ")
+    if user_input.lower() == 'exit':
+        break
+    predict_message(user_input)
